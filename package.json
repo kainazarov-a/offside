@@ -1,0 +1,15 @@
+{
+  "name": "offside",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "token": "node tools/get_token.mjs"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.30.1",
+    "@solana/web3.js": "^1.95.3",
+    "@solana/spl-token": "^0.4.8",
+    "axios": "^1.7.4",
+    "tweetnacl": "^1.0.3"
+  }
+}

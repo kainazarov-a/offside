@@ -1,0 +1,218 @@
+/* ============================================================
+   OFFSIDE · design tokens v5
+   Night-stadium navy, drifting aurora, starfield, acid signal.
+   ============================================================ */
+
+:root {
+  /* surfaces: deep navy, not black */
+  --bg:        #0C1322;
+  --bg-2:      #0A101D;
+  --panel:     #131C30;
+  --panel-2:   #17233B;
+  --line:      #263452;
+  --line-soft: rgba(38,52,82,.55);
+
+  /* ink */
+  --ink:       #F4F7F5;
+  --muted:     #9AA6B8;
+  --faint:     #55617A;
+
+  /* accents */
+  --acid:      #C8FF2E;
+  --acid-dim:  #9BD415;
+  --hot:       #FF5A5A;
+  --cool:      #45C8FF;
+  --gold:      #FFD34D;
+  --violet:    #7B5CFF;
+
+  /* type */
+  --disp: 'Space Grotesk', Inter, system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', monospace;
+
+  --r: 14px;
+  --shadow: 0 14px 40px rgba(3,8,20,.5);
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; scrollbar-color: #2A3854 var(--bg-2); }
+
+body {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--disp);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  background: linear-gradient(180deg, #0E1628 0%, var(--bg) 40%, var(--bg-2) 100%);
+  background-attachment: fixed;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* --- drifting aurora blobs --- */
+body::before {
+  content: ""; position: fixed; inset: -20%; z-index: -2; pointer-events: none;
+  background:
+    radial-gradient(620px 460px at 16% 12%, rgba(200,255,46,.10), transparent 62%),
+    radial-gradient(760px 560px at 86% 22%, rgba(69,200,255,.11), transparent 64%),
+    radial-gradient(700px 620px at 55% 96%, rgba(123,92,255,.12), transparent 62%);
+  filter: blur(6px);
+  animation: aurora 80s ease-in-out infinite alternate;
+}
+@keyframes aurora {
+  0%   { transform: translate(0,0) scale(1); }
+  50%  { transform: translate(3%,-2%) scale(1.06); }
+  100% { transform: translate(-3%,2%) scale(1.02); }
+}
+
+/* --- starfield: two parallax layers of tiny dots --- */
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    radial-gradient(1.4px 1.4px at 22px 34px,  rgba(244,247,245,.55), transparent 55%),
+    radial-gradient(1.2px 1.2px at 121px 96px, rgba(69,200,255,.5),  transparent 55%),
+    radial-gradient(1px   1px   at 203px 51px, rgba(244,247,245,.4), transparent 55%),
+    radial-gradient(1.6px 1.6px at 68px 158px, rgba(200,255,46,.45), transparent 55%),
+    radial-gradient(1px   1px   at 172px 197px,rgba(244,247,245,.35), transparent 55%),
+    radial-gradient(1.2px 1.2px at 258px 132px,rgba(244,247,245,.45), transparent 55%);
+  background-size: 290px 240px;
+  opacity: .8;
+  animation: starDrift 160s linear infinite;
+}
+@keyframes starDrift {
+  from { background-position: 0 0; }
+  to   { background-position: -580px -240px; }
+}
+
+::selection { background: var(--acid); color: #0A101D; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2A3854; border-radius: 6px; border: 2px solid var(--bg-2); }
+::-webkit-scrollbar-thumb:hover { background: #3A4C70; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* --- the offside line motif --- */
+.offside-line { position: relative; padding-left: 14px; }
+.offside-line::before {
+  content: ''; position: absolute; left: 0; top: 2px; bottom: 2px; width: 2px;
+  background: var(--acid); box-shadow: 0 0 12px rgba(200,255,46,.45);
+}
+
+/* --- panels --- */
+.card {
+  background: linear-gradient(180deg, rgba(23,35,59,.92) 0%, rgba(19,28,48,.92) 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 18px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.03) inset;
+}
+.card.hi { border-color: rgba(200,255,46,.3); }
+
+/* --- headings --- */
+h1, .h1 {
+  font-weight: 700; letter-spacing: -0.03em;
+  font-size: clamp(34px, 5vw, 58px); line-height: 1.04; margin: 0;
+}
+h2, .h2 { font-weight: 700; letter-spacing: -0.02em; font-size: clamp(22px, 2.6vw, 30px); margin: 0 0 10px; }
+.kicker {
+  color: var(--acid); font-family: var(--mono); font-size: 12px;
+  letter-spacing: .2em; text-transform: uppercase;
+}
+
+/* --- the wordmark: OFFSIDE with the offside line through it --- */
+.wordmark { position: relative; display: inline-block; font-family: var(--disp);
+  font-weight: 700; letter-spacing: -.02em; line-height: 1; white-space: nowrap; }
+.wordmark .txt {
+  position: relative; z-index: 1;
+  background: linear-gradient(180deg,#FFFFFF 0%,#DCE6F2 55%,#93A3BE 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.wordmark .ball { display: inline-block; width: .16em; height: .16em; margin-left: .07em;
+  border-radius: 50%; vertical-align: baseline; position: relative; z-index: 1;
+  background: radial-gradient(circle at 32% 30%, #EAFFB0 0 28%, var(--acid) 55%, #7FA80D 100%);
+  box-shadow: 0 0 .35em rgba(200,255,46,.75); }
+/* the offside line runs BEHIND the letters, low, like a pitch line — not a strikethrough */
+.wordmark .cut { position: absolute; left: -6%; right: -2%; top: 72%; height: .05em;
+  min-height: 2px; z-index: 0; opacity: .9;
+  background: linear-gradient(90deg, transparent, rgba(200,255,46,.9) 14%, rgba(200,255,46,.9) 86%, transparent);
+  transform: rotate(-3deg); transform-origin: center;
+  box-shadow: 0 0 .28em rgba(200,255,46,.55); pointer-events: none; }
+.nav .wordmark .cut { display: none; }   /* в навбаре — чистая марка с мячом */
+
+/* --- numbers are always mono --- */
+.num, td.num, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* --- data table --- */
+table.data { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.data th {
+  text-align: left; color: var(--muted); font-weight: 500;
+  border-bottom: 1px solid var(--line); padding: 9px 10px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+}
+table.data td { padding: 9px 10px; border-bottom: 1px solid var(--line-soft); }
+table.data tr:hover td { background: rgba(244,247,245,.025); }
+.up   { color: var(--acid); }
+.down { color: var(--hot); }
+
+/* --- live tape --- */
+.tape-item {
+  display: flex; gap: 10px; align-items: baseline;
+  padding: 9px 12px; border-left: 2px solid var(--line);
+  font-family: var(--mono); font-size: 13px; border-radius: 0 8px 8px 0;
+}
+.tape-item.goal   { border-left-color: var(--gold); background: rgba(255,211,77,.06); }
+.tape-item.signal { border-left-color: var(--acid); background: rgba(200,255,46,.06); }
+.tape-item.disloc { border-left-color: var(--cool); }
+
+/* --- badges --- */
+.badge {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .12em;
+  padding: 4px 11px; border-radius: 999px; border: 1px solid var(--line);
+  color: var(--muted); text-transform: uppercase; white-space: nowrap;
+}
+.badge.anchored { color: var(--acid); border-color: rgba(200,255,46,.45); background: rgba(200,255,46,.07); }
+.badge.live { color: var(--hot); border-color: rgba(255,90,90,.45); background: rgba(255,90,90,.07); }
+#feedBadge { font-size: 12px; padding: 8px 18px; font-weight: 700; letter-spacing: .14em; }
+
+/* --- top bar: brand left, tabs centered, LIVE right --- */
+.nav {
+  display: flex; align-items: center; gap: 6px; padding: 13px 24px;
+  border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(10,16,29,.78); backdrop-filter: blur(16px);
+}
+.nav .brand { text-decoration: none; margin-right: 18px; font-size: 21px; }
+.nav .tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
+  position: absolute; left: 50%; transform: translateX(-50%); max-width: 62vw; }
+.nav .tabs::-webkit-scrollbar { display: none; }
+@media (max-width: 1150px) {
+  .nav .tabs { position: static; transform: none; max-width: none; margin: 0 8px; }
+}
+.nav a.tab {
+  color: var(--muted); text-decoration: none; padding: 8px 14px;
+  border-radius: 9px; font-family: var(--mono); font-size: 12px;
+  letter-spacing: .1em; text-transform: uppercase; white-space: nowrap;
+  transition: color .15s, background .15s;
+}
+.nav a.tab.active { color: #0A101D; background: var(--acid); font-weight: 700;
+  box-shadow: 0 4px 18px rgba(200,255,46,.28); }
+.nav a.tab:hover:not(.active) { color: var(--ink); background: var(--panel-2); }
+.nav .spacer { margin-left: auto; }
+
+/* --- buttons --- */
+.btn {
+  display: inline-block; background: var(--acid); color: #0A101D; border: 0; cursor: pointer;
+  padding: 12px 22px; border-radius: 11px; font-weight: 700; text-decoration: none;
+  font-family: var(--mono); letter-spacing: .05em; text-transform: uppercase; font-size: 12px;
+  box-shadow: 0 6px 26px rgba(200,255,46,.25);
+  transition: transform .15s, box-shadow .2s;
+}
+.btn:hover { transform: translateY(-1px); box-shadow: 0 10px 34px rgba(200,255,46,.34); }
+.btn:active { transform: translateY(0); }
+.btn.ghost { background: rgba(23,35,59,.6); color: var(--ink); border: 1px solid var(--line); box-shadow: none; }
+.btn.ghost:hover { border-color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  html { scroll-behavior: auto; }
+}

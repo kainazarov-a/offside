@@ -1,0 +1,21 @@
+# OFFSIDE · systemd unit (З4, Hetzner/любой Ubuntu VPS)
+# Установка (на сервере, из-под root):
+#   cp deploy/offside.service /etc/systemd/system/offside.service
+#   systemctl daemon-reload && systemctl enable --now offside
+# Логи:  journalctl -u offside -f
+[Unit]
+Description=OFFSIDE · TxLINE vs Polymarket lag agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/offside
+ExecStart=/usr/bin/python3 /opt/offside/backend/server.py --live --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+# ночные фиды падать не должны, но если что — systemd поднимет за 5с
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

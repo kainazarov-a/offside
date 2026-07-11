@@ -1,0 +1,13 @@
+node_modules/
+wallet.json
+.secrets/
+probe_out/
+__pycache__/
+*.pyc
+.env
+dist/
+trash/
+idl/
+ngrok.exe
+*.zip
+.ngrok2/
