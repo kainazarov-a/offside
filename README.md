@@ -9,7 +9,9 @@ and simultaneously measures — in milliseconds — how far behind the retail cr
 latency-aware execution model and full fee accounting, and reports honest PnL,
 signal accuracy (Brier score), and lag distributions.
 
-Track: **Trading Tools and Agents** · World Cup Hackathon by TxODDS × Solana × Superteam Earn.
+Tracks: **Trading Tools and Agents** (primary) and **Prediction Markets and
+Settlement** (as *OFFSIDE Lens*: the live market viewer plus the on-chain Verify
+layer) · World Cup Hackathon by TxODDS × Solana × Superteam Earn.
 
 ---
 
@@ -142,6 +144,18 @@ in the footer. This is not betting advice and places no real bets anywhere.
 - [x] Polymarket autodiscovery + WS + poller + watchdog
 - [x] Engine: detector / lag meter / paper trader / Brier
 - [x] FastAPI server (lifespan) + SSE + frontend SPA (6 tabs)
-- [x] Replay mode (R-lane, feed-time minutes)
+- [x] Replay mode v3: R-lane, feed-time minutes, per-viewer privacy, stop control,
+      auto-timeout, resilient start (JWT auto-refresh + warmed history pool)
 - [x] Verify tab: Merkle proof + on-chain `validateStatV2` view
-- [ ] Public deploy link · demo video · submission
+- [x] Public deploy (Hetzner VPS, systemd, 24/7) · demo videos · both tracks submitted
+
+## Roadmap
+
+Built for the hackathon — engineered to outlive it.
+
+- **Next (in build):** accounts and saved workspaces (login); alert rules
+  (lag / gap thresholds → Telegram or webhook); season archive with searchable
+  match and dislocation history; fully isolated replay engine per viewer.
+- **Later (researching):** more venues side by side beyond Polymarket; public
+  read API and CSV export of lag data; latency SLO dashboard for B2B feed
+  monitoring; a second sport on the same engine (basketball first).

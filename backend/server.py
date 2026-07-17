@@ -54,6 +54,20 @@ async def lifespan(app):
             await Polymarket(engine, fixtures).run()
 
         asyncio.create_task(TxLine(engine).run(after_bootstrap=_pm_after))
+
+        async def _prewarm():
+            # греем пул истории (96ч-свип) заранее: первый клик по Replay/Verify
+            # не должен молча ждать холодный свип
+            await asyncio.sleep(5)
+            try:
+                import verify as vf
+                pool = await vf.candidates()
+                print(f"[server] history pool warmed: {len(pool)} matches",
+                      flush=True)
+            except Exception as e:
+                print(f"[server] prewarm err: {e!r}", flush=True)
+
+        asyncio.create_task(_prewarm())
         print("[offside] LIVE MODE: TxLINE mainnet real-time + Polymarket")
     yield
 
@@ -86,7 +100,32 @@ async def stream():
                                       "X-Accel-Buffering": "no"})
 
 
-_replay_state = {"running": False, "msg": ""}
+# ---------- REPLAY: один прогон на сервер, приватный для запустившего (cid) ----------
+_replay_state = {"running": False, "msg": "", "fid": None, "cid": None}
+_replay_task = None
+REPLAY_MAX_S = 1200          # авто-стоп: забытый реплей гаснет сам через 20 мин
+
+
+def _replay_cleanup():
+    """убрать карточку текущего реплея из движка (фронт получит remove)"""
+    if _replay_state.get("fid"):
+        engine.remove_match(f"R{_replay_state['fid']}")
+
+
+async def _stop_replay():
+    """остановить текущий прогон и прибрать его карточку"""
+    global _replay_task
+    t, _replay_task = _replay_task, None
+    if t and not t.done():
+        t.cancel()
+        try:
+            await t
+        except (asyncio.CancelledError, Exception):
+            pass   # CancelledError — BaseException, ловим явно
+    # безусловно: finally таски сбрасывает running раньше нас (гонка),
+    # поэтому уборку карточки на running не завязываем
+    _replay_cleanup()
+    _replay_state.update(running=False, msg="stopped")
 
 
 @app.get("/api/replay/list")
@@ -99,28 +138,50 @@ async def replay_list():
 
 
 @app.post("/api/replay/start")
-async def replay_start(fid: str, speed: float = 30.0):
+async def replay_start(fid: str, speed: float = 30.0, cid: str = ""):
+    global _replay_task
     import replay as rp
     if _replay_state["running"]:
-        return JSONResponse({"error": "replay уже идёт"}, status_code=409)
+        if cid and cid == _replay_state.get("cid"):
+            await _stop_replay()      # тот же зритель выбрал другой матч — перезапуск
+        else:
+            return JSONResponse({"error": "replay busy"}, status_code=409)
 
     def cb(msg):
         _replay_state["msg"] = msg
 
     async def _run():
-        _replay_state["running"] = True
+        _replay_state.update(running=True, msg="starting", fid=fid, cid=cid)
         try:
-            await rp.run_replay(engine, fid, speed, status_cb=cb)
+            await asyncio.wait_for(
+                rp.run_replay(engine, fid, speed, status_cb=cb),
+                timeout=REPLAY_MAX_S)
+        except asyncio.TimeoutError:
+            cb("авто-стоп по таймеру")
+            _replay_cleanup()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            cb(f"error: {e!r}")
         finally:
             _replay_state["running"] = False
 
-    asyncio.create_task(_run())
+    _replay_task = asyncio.create_task(_run())
+    return JSONResponse({"ok": True})
+
+
+@app.post("/api/replay/stop")
+async def replay_stop(cid: str = ""):
+    if not _replay_state["running"]:
+        return JSONResponse({"ok": True, "note": "idle"})
+    await _stop_replay()
     return JSONResponse({"ok": True})
 
 
 @app.get("/api/replay/status")
 async def replay_status():
-    return JSONResponse(_replay_state)
+    return JSONResponse({k: _replay_state[k]
+                         for k in ("running", "msg", "fid", "cid")})
 
 
 # ---------- VERIFY: гол -> Merkle-пруф -> программа на Solana ----------

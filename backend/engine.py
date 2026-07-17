@@ -89,6 +89,20 @@ class Engine:
         self.bus.publish(dict(type="fixture", m=m, home=home, away=away,
                               kickoff=kickoff))
 
+    def remove_match(self, m):
+        """полная уборка карточки (стоп реплея): чистим состояние, шлём remove фронту"""
+        self.matches.pop(m, None)
+        for d in (self.tx, self.pm, self.txwin, self.last_sig_t):
+            for k in [k for k in d if k[0] == m]:
+                d.pop(k, None)
+        for k in [k for k in self.series if k[1] == m]:
+            self.series.pop(k, None)
+        for sid in [s for s, c in self.lag_wait.items() if c["m"] == m]:
+            self.lag_wait.pop(sid, None)
+        self.pending = [p for p in self.pending if p["m"] != m]
+        self.open_trades = [t for t in self.open_trades if t["m"] != m]
+        self.bus.publish(dict(type="remove", m=m))
+
     def on_event(self, m, kind, team=None, minute=None, score=None):
         mt = self.matches.get(m)
         if not mt:
@@ -262,6 +276,12 @@ class Engine:
 
     # ---------------- точность сигналов ----------------
     def _resolve(self, m):
+        if str(m).startswith("R"):
+            # реплей не должен загрязнять боевую точность (acc/Brier)
+            for sid, pred in list(self._pred.items()):
+                if pred[0] == m:
+                    self._pred.pop(sid, None)
+            return
         mt = self.matches.get(m)
         if not mt:
             return

@@ -142,6 +142,27 @@
     padding:13px 6px;border-bottom:1px solid var(--line)}
   .rp-item:hover{background:rgba(244,247,245,.02)}
   .rp-item:last-child{border-bottom:0}
+  #rpStatus{font-family:var(--mono);font-size:12.5px;margin:0 0 12px;color:var(--muted);min-height:18px}
+  #rpStatus b{color:var(--acid)}
+  #rpStatus a{color:var(--cool)}
+  .match.is-replay{border-color:rgba(69,200,255,.45)}
+  .match.is-replay::before{background:linear-gradient(90deg,transparent,var(--cool) 25%,var(--cool) 75%,transparent);
+    box-shadow:0 0 14px rgba(69,200,255,.5)}
+  .chip-replay{display:inline-block;background:var(--cool);color:#07131C;font-weight:700;
+    border-radius:6px;padding:1px 8px;letter-spacing:.08em}
+  .btnstop{background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;
+    padding:2px 10px;font-family:var(--mono);font-size:11px;cursor:pointer;transition:.15s;vertical-align:middle}
+  .btnstop:hover{color:var(--hot);border-color:rgba(255,90,90,.5)}
+  .roadmap{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:22px}
+  .roadmap .col{border:1px solid var(--line);border-radius:16px;padding:20px;
+    background:linear-gradient(180deg,var(--panel-2),var(--panel));transition:transform .2s,border-color .2s}
+  .roadmap .col:hover{transform:translateY(-3px);border-color:rgba(200,255,46,.35)}
+  .roadmap .tag{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--acid)}
+  .roadmap .col.next .tag{color:var(--cool)} .roadmap .col.later .tag{color:var(--gold)}
+  .roadmap h3{margin:8px 0 4px;font-size:17px}
+  .roadmap ul{margin:12px 0 0;padding-left:18px;color:var(--muted);font-size:14px}
+  .roadmap li{margin:7px 0}
+  @media(max-width:1150px){.roadmap{grid-template-columns:1fr}}
 
   /* ================= VERIFY ================= */
   .vgrid{display:grid;grid-template-columns:430px 1fr;gap:16px}
@@ -355,6 +376,38 @@
       <div class="honest">Paper trading only. Execution latency and spread are modeled
         and shown next to every result. No promises of profit. Just measurements.</div>
     </section>
+
+    <section class="sect">
+      <div class="kicker">Roadmap</div>
+      <h2>Built for the hackathon — engineered to outlive it</h2>
+      <div class="roadmap">
+        <div class="col"><span class="tag">Shipped · running now</span>
+          <h3>The instrument works</h3>
+          <ul>
+            <li>Live cross-venue lag meter: TxLINE vs Polymarket, per outcome</li>
+            <li>Autonomous paper agent with an honest latency + spread model</li>
+            <li>On-chain goal proofs: real <b>validateStatV2</b> calls on mainnet</li>
+            <li>Replay of any finished match — private per viewer, with a stop control</li>
+            <li>Sim mode, systemd deploy, running 24/7 on its own server</li>
+          </ul></div>
+        <div class="col next"><span class="tag">Next · in build</span>
+          <h3>From demo to daily tool</h3>
+          <ul>
+            <li>Accounts and saved workspaces (login)</li>
+            <li>Alert rules: lag or gap thresholds → Telegram or webhook</li>
+            <li>Season archive: searchable history of every match and dislocation</li>
+            <li>Fully isolated replay engine per viewer</li>
+          </ul></div>
+        <div class="col later"><span class="tag">Later · researching</span>
+          <h3>Wider field of play</h3>
+          <ul>
+            <li>More venues side by side: books and exchanges beyond Polymarket</li>
+            <li>Public read API and CSV export of lag data</li>
+            <li>Latency SLO dashboard for B2B feed monitoring</li>
+            <li>Second sport on the same engine — basketball first</li>
+          </ul></div>
+      </div>
+    </section>
   </div>
 
   <!-- ================= LIVE ================= -->
@@ -414,11 +467,14 @@
   <!-- ================= REPLAY ================= -->
   <div id="tab-replay" hidden>
     <div class="section-title offside-line">Replay · rerun a finished match through the same pipeline</div>
+    <div id="rpStatus"></div>
     <div class="card" id="replayList"><div class="empty">Loading.</div></div>
     <p class="muted" style="font-family:var(--mono);font-size:12px">Matches that started
       between 6 hours and 2 weeks ago can be replayed at 30x speed. Replay drives the
-      exact same ingestion and detector pipeline on real historical TxLINE data. The
-      crowd feed is live only, so the paper trader idles during a replay.</p>
+      exact same ingestion and detector pipeline on real historical TxLINE data.
+      Your replay is pinned to the top of the Live tab and is visible only in your
+      browser session — stop it anytime with the ■ button. The crowd feed is live
+      only, so the paper trader idles during a replay.</p>
   </div>
 
   <!-- ================= VERIFY ================= -->
@@ -542,6 +598,7 @@ python backend/server.py --live                          # or --sim for a synthe
         <h2 id="d-api">API surface</h2>
         <p>OFFSIDE's own endpoints: <code>/api/state</code>, <code>/api/stream</code> (SSE),
           <code>/api/replay/list</code>, <code>/api/replay/start</code>,
+          <code>/api/replay/stop</code>, <code>/api/replay/status</code>,
           <code>/api/verify/candidates</code>, <code>/api/verify/goals</code>,
           <code>/api/verify/prove</code>.</p>
         <p>TxLINE endpoints used: guest auth and token activation, fixtures snapshot,

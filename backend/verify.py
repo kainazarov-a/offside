@@ -90,6 +90,7 @@ def _live_goals():
 
 SWEEP_HOURS = 96          # сколько часов назад метём /fixtures/updates (4 суток)
 _cand_cache = {"t": 0.0, "data": None}
+_prove_cache = {}         # (fid,seq,stat,expect) -> (t, result); только готовые вердикты
 
 
 async def _sweep_recent_fixtures(cl, cfg):
@@ -240,7 +241,14 @@ async def prove(fid, seq, stat="1", expect=None):
         stats=val.get("statsToProve"),
         updateCount=val["summary"]["updateStats"]["updateCount"])
 
-    # 2) on-chain view() — исполняет сам Txoracle на mainnet
+    # 2) on-chain view() — исполняет сам Txoracle на mainnet (кеш 10 мин на готовые вердикты:
+    # авто-демо на вкладке не должно гонять RPC при каждом визите)
+    ck = (str(fid), str(seq), str(stat), None if expect is None else str(expect))
+    hit = _prove_cache.get(ck)
+    if hit and time.time() - hit[0] < 600:
+        result["onchain"] = hit[1]
+        result["cached"] = True
+        return result
     cmd = ["node", MJS, "--fid", str(fid), "--seq", str(seq),
            "--stat", str(stat)]
     if expect is not None:
@@ -258,6 +266,8 @@ async def prove(fid, seq, stat="1", expect=None):
         line = (so or b"").decode("utf-8", "replace").strip().splitlines()
         result["onchain"] = json.loads(line[-1]) if line else \
             {"error": (se or b"").decode("utf-8", "replace")[-300:]}
+        if result["onchain"].get("ok") is not None:      # кешируем только финальные вердикты
+            _prove_cache[ck] = (time.time(), result["onchain"])
     except FileNotFoundError:
         result["onchain"] = {"error": "node не найден в PATH"}
     except Exception as e:

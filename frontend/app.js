@@ -2,8 +2,13 @@
 "use strict";
 
 const S = { matches:new Map(), series:new Map(), tape:[], signals:[], lags:[],
-            open:[], closed:[], stats:{}, eq:[], dirty:true, replay:{} };
+            open:[], closed:[], stats:{}, eq:[], dirty:true, replay:{},
+            rp:{running:false} };
 const OUT = ["home","draw","away"];
+/* реплей приватен: чужие R-карточки этот браузер просто не рисует */
+const CID = sessionStorage.oid || (sessionStorage.oid = Math.random().toString(36).slice(2,10));
+const myReplays = new Set((sessionStorage.myReplays||"").split(",").filter(Boolean));
+const foreignR = m => String(m||"").startsWith("R") && !myReplays.has(String(m));
 const $ = id => document.getElementById(id);
 const fmtP = p => p==null ? "–" : (p*100).toFixed(1)+"%";
 const fmtT = t => new Date(t*1000).toLocaleTimeString();
@@ -43,7 +48,11 @@ function pushTape(cls,text){
 }
 
 function onEvent(ev){
+  if(ev.m!=null && foreignR(ev.m)) return;          // не мой реплей — не моё дело
   switch(ev.type){
+    case "remove":{ S.matches.delete(ev.m);
+      OUT.forEach(o=>S.series.delete(serKey(ev.m,o)));
+      S.signals=S.signals.filter(s=>s.m!==ev.m); break; }
     case "fixture":{ const M=ensureMatch(ev.m); M.home=ev.home; M.away=ev.away;
       if(ev.kickoff) M.kickoff=ev.kickoff; break; }
     case "tick":{ const M=ensureMatch(ev.m);
@@ -88,6 +97,7 @@ es.onerror=()=>{const b=$("feedBadge");b.textContent="reconnecting…";b.classNa
 es.onmessage=e=>{try{onEvent(JSON.parse(e.data));}catch(_){}};
 fetch("/api/state").then(r=>r.json()).then(sn=>{
   (sn.matches||[]).forEach(mt=>{
+    if(foreignR(mt.m)) return;
     const M=ensureMatch(mt.m);
     Object.assign(M,{home:mt.home,away:mt.away,score:mt.score,minute:mt.minute,
                      status:mt.status,kickoff:mt.kickoff});
@@ -97,9 +107,10 @@ fetch("/api/state").then(r=>r.json()).then(sn=>{
       (mt.probs[o].spark_pm||[]).forEach(x=>s.pm.push(x[1]));
       S.series.set(k,s); });
   });
-  S.signals=(sn.signals||[]).slice().reverse();
-  S.lags=(sn.lags||[]).slice().reverse();
-  S.open=sn.open_trades||[]; S.closed=(sn.closed||[]).slice().reverse();
+  S.signals=(sn.signals||[]).filter(x=>!foreignR(x.m)).slice().reverse();
+  S.lags=(sn.lags||[]).filter(x=>!foreignR(x.m)).slice().reverse();
+  S.open=(sn.open_trades||[]).filter(x=>!foreignR(x.m));
+  S.closed=(sn.closed||[]).filter(x=>!foreignR(x.m)).slice().reverse();
   S.stats=sn.stats||{}; S.cfg=sn.cfg||{}; S.dirty=true;
 }).catch(()=>{});
 
@@ -136,16 +147,26 @@ function histogram(cv,vals){
 }
 
 /* ---------- renders ---------- */
+const TIP={
+  "crowd lag p50":"median time the crowd (Polymarket) needs to absorb a sharp move",
+  "brier":"signal calibration: 0 is perfect, 0.25 is a coin flip",
+  "accuracy":"share of signals whose favourite at signal time actually won",
+  "paper equity":"cumulative paper PnL under the cost model printed on PnL",
+  "equity $":"cumulative paper PnL under the cost model printed above the table",
+  "win rate":"share of closed paper trades with positive PnL",
+  "signals":"sharp jumps and goals the detector considered worth acting on",
+  "dislocations":"moments when the crowd price lagged the sharp feed",
+  "no reaction":"dislocations the crowd never closed within 60 seconds"};
 function kv(el,pairs){ el.innerHTML=pairs.map(([k,v])=>
-  `<div class="item"><div class="k">${k}</div><div class="v">${v??"–"}</div></div>`).join(""); }
+  `<div class="item" title="${TIP[k]||""}"><div class="k">${k}</div><div class="v">${v??"–"}</div></div>`).join(""); }
 function countdown(ko){ if(!ko)return""; const d=ko-Date.now(); if(d<=0)return"";
   const h=Math.floor(d/3.6e6),mn=Math.floor(d%3.6e6/6e4);
   return `kickoff in ${h}h ${String(mn).padStart(2,"0")}m`; }
 
 function renderLive(){
+  const rk=x=>myReplays.has(String(x.m))?-1:(x.status==="live"?0:x.status==="pre"?1:2);
   const ms=[...S.matches.values()].sort((a,b)=>
-    (a.status==="live"?0:a.status==="pre"?1:2)-(b.status==="live"?0:b.status==="pre"?1:2)
-    || (a.kickoff||9e15)-(b.kickoff||9e15));
+    rk(a)-rk(b) || (a.kickoff||9e15)-(b.kickoff||9e15));
   $("cards").innerHTML = ms.length? ms.map(M=>{
     const cd=M.status==="pre"?countdown(M.kickoff):"";
     const rows=OUT.map(o=>{
@@ -161,10 +182,12 @@ function renderLive(){
         </div>
         <div class="vals"><span class="tx">${fmtP(p.tx)}</span><span class="sep">·</span><span class="pm">${fmtP(p.pm)}</span></div>
       </div>`;}).join("");
-    const live=M.status==="live";
-    return `<div class="card match ${live?"is-live":""} ${Date.now()-M.flash<400?"pulse":""}">
+    const live=M.status==="live", isR=myReplays.has(String(M.m));
+    const stopBtn = isR && S.rp.running && S.rp.cid===CID && ("R"+S.rp.fid)===String(M.m)
+      ? ` <button class="btnstop" onclick="stopReplay()">■ stop</button>` : "";
+    return `<div class="card match ${live?"is-live":""} ${isR?"is-replay":""} ${Date.now()-M.flash<400?"pulse":""}">
       <div class="teams"><span>${M.home}</span><span class="score">${M.score[0]}–${M.score[1]}</span><span>${M.away}</span></div>
-      <div class="meta">${String(M.m).startsWith("R")?"REPLAY · ":""}${live?`<span class="dotlive"></span>LIVE · ${M.minute}'`:M.status.toUpperCase()} ${cd?"· "+cd:""} · <span class="fid">${M.m}</span></div>
+      <div class="meta">${isR?`<span class="chip-replay">REPLAY ×30 · only you see this</span> · `:""}${live?`<span class="dotlive"></span>LIVE · ${M.minute}'`:M.status.toUpperCase()} ${cd?"· "+cd:""} · <span class="fid">${M.m}</span>${stopBtn}</div>
       ${rows}</div>`;
   }).join("") : `<div class="empty">Waiting for the feed.</div>`;
   document.querySelectorAll("canvas.spark").forEach(cv=>{
@@ -186,7 +209,7 @@ function renderAgent(){
      <td>${s.o}</td><td>${s.kind}</td>
      <td class="num ${s.dp>0?"up":"down"}">${s.dp==null?"–":(s.dp*100).toFixed(1)}</td>
      <td class="num">${s.gap==null?"–":(s.gap*100).toFixed(1)}</td></tr>`).join("")
-    || `<tr><td colspan="7" class="empty">No signals yet. Signals are born during live play, and every match is still pre-kickoff.${nextKick()} Meanwhile the Replay tab reruns finished matches through this same detector.</td></tr>`;
+    || `<tr><td colspan="7" class="empty">No signals yet. Signals are born during live play, and every match is still pre-kickoff.${nextKick()}<br><a class="btn ghost" style="margin-top:12px" href="#replay">Watch a replay instead</a></td></tr>`;
   $("openTable").tBodies[0].innerHTML=S.open.map(t=>
     `<tr><td class="num">${t.id}</td><td>${name(t.m)}</td><td>${t.o}</td><td>${t.side}</td>
      <td class="num">${t.entry}</td><td class="num">${t.fair0}</td></tr>`).join("")
@@ -203,7 +226,7 @@ function renderLag(){
   $("lagTable").tBodies[0].innerHTML=S.lags.slice(0,60).map(l=>
     `<tr><td class="num">${l.sig}</td><td>${name(l.m)}</td><td class="num">${l.gap0_pp}</td>
      <td class="num ${l.react_ms==null?"down":""}">${l.react_ms==null?"no reaction":l.react_ms}</td></tr>`).join("")
-    || `<tr><td colspan="4" class="empty">No dislocations yet. Reaction times get measured during live matches only.${nextKick()}</td></tr>`;
+    || `<tr><td colspan="4" class="empty">No dislocations yet. Reaction times get measured during live matches only.${nextKick()}<br><a class="btn ghost" style="margin-top:12px" href="#replay">Watch a replay instead</a></td></tr>`;
 }
 function renderPnl(){
   const st=S.stats, c=S.cfg||{};
@@ -216,7 +239,7 @@ function renderPnl(){
     `<tr><td class="num">${t.id}</td><td>${name(t.m)}</td><td>${t.o}</td><td>${t.side}</td>
      <td class="num">${t.entry}</td><td class="num">${t.exit}</td>
      <td class="num ${t.pnl>=0?"up":"down"}">${t.pnl>=0?"+":""}${t.pnl}</td><td>${t.reason}</td></tr>`).join("")
-    || `<tr><td colspan="8" class="empty">No closed trades yet. Paper trades open and close during live play.${nextKick()}</td></tr>`;
+    || `<tr><td colspan="8" class="empty">No closed trades yet. Paper trades open and close during live play.${nextKick()}<br><a class="btn ghost" style="margin-top:12px" href="#verify">Prove a real goal on Verify meanwhile</a></td></tr>`;
 }
 async function renderReplay(){
   if(S.replay.loaded) return;
@@ -232,10 +255,43 @@ async function renderReplay(){
 }
 window.startReplay=async (fid,btn)=>{
   if(btn){btn.disabled=true;btn.textContent="STARTING…";}
-  await fetch(`/api/replay/start?fid=${fid}&speed=30`,{method:"POST"});
-  pushTape("signal","▶ REPLAY started · watch the new card on Live");
-  location.hash="#live";
+  try{
+    const r=await fetch(`/api/replay/start?fid=${fid}&speed=30&cid=${CID}`,{method:"POST"});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){
+      if(btn){btn.disabled=false;btn.textContent="Replay ×30";}
+      const note=d.error==="replay busy"
+        ? "⏳ replay engine is busy with another visitor — try again in a minute"
+        : "replay error: "+(d.error||r.status);
+      const el=$("rpStatus"); if(el) el.textContent=note;
+      pushTape("goal",note); S.dirty=true; return;
+    }
+    myReplays.add("R"+fid); sessionStorage.myReplays=[...myReplays].join(",");
+    if(btn){btn.disabled=false;btn.textContent="Replay ×30";}
+    pushTape("signal","▶ REPLAY started · pinned on top of Live, visible only to you");
+    location.hash="#live";
+  }catch(e){ if(btn){btn.disabled=false;btn.textContent="Replay ×30";} }
 };
+window.stopReplay=async ()=>{
+  try{ await fetch(`/api/replay/stop?cid=${CID}`,{method:"POST"}); }catch(_){}
+  pushTape("","■ replay stopped"); S.dirty=true;
+};
+/* пульс реплей-движка: статус-строка + перерисовка кнопки stop на карточке */
+setInterval(async ()=>{
+  try{
+    const r=await fetch("/api/replay/status"); const d=await r.json();
+    const changed=JSON.stringify(d)!==JSON.stringify(S.rp);
+    S.rp=d; if(changed) S.dirty=true;
+    const el=$("rpStatus");
+    if(el){
+      el.innerHTML = d.running
+        ? (d.cid===CID
+           ? `▶ your replay is running — <b>${d.msg||"working"}</b> · <button class="btnstop" onclick="stopReplay()">■ stop</button> · <a href="#live">watch it on Live</a>`
+           : `⏳ replay engine is busy with another visitor's run — try again in a minute`)
+        : "";
+    }
+  }catch(_){}
+},2500);
 
 /* ---------- verify ---------- */
 const V={loaded:false,byFid:new Map()};
@@ -250,9 +306,12 @@ async function renderVerify(){
     list.forEach(f=>V.byFid.set(f.fid,f));
     $("vSel").innerHTML=`<option value="">— pick a match —</option>`+list.map(f=>
       `<option value="${f.fid}">${f.home} vs ${f.away} · ${new Date(f.start).toLocaleDateString()}${f.live_goals?" · caught live":""}</option>`).join("");
+    // авто-демо: сразу показываем голы лучшего кандидата и СРАЗУ доказываем последний гол
+    const first=(list.find(f=>f.live_goals>0)||list[0]);
+    if(first){ $("vSel").value=first.fid; loadGoals(first.fid,true); }
   }catch(e){ $("vSel").innerHTML=`<option value="">${e}</option>`; }
 }
-window.loadGoals=async fid=>{
+window.loadGoals=async (fid,auto)=>{
   if(!fid) return;
   $("vGoals").innerHTML=`<div class="empty">Reading match history.</div>`;
   try{
@@ -265,6 +324,10 @@ window.loadGoals=async fid=>{
         <span><span class="gsc">${g.score[0]}–${g.score[1]}</span> · seq ${g.seq}</span>
       </button>`).join("")
       : `<div class="empty">0 to 0. No goals to prove in this match.</div>`;
+    if(auto && d.goals.length){
+      const g=d.goals[d.goals.length-1];   // самый свежий гол — сразу на on-chain проверку
+      proveGoal(fid,g.seq,g.stat_key,g.value,g.side,g.minute,`${g.score[0]}–${g.score[1]}`);
+    }
   }catch(e){ $("vGoals").innerHTML=`<div class="empty">${e}</div>`; }
 };
 window.proveGoal=async (fid,seq,stat,expect,side,minute,score)=>{

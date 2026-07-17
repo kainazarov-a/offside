@@ -7,15 +7,14 @@ OFFSIDE · replay.py — прогон завершённого матча чер
 (5-минутные интервалы). Скорость xN. Идеален для демо и для судей.
 """
 import asyncio
-import json
 import os
 
 import httpx
 
 from txline import TxLine
+from verify import _cfg as _vcfg, _get as _vget, _json as _vjson
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SEC = os.path.join(ROOT, ".secrets", "txline.json")
 
 
 def _fx_meta(fx):
@@ -37,19 +36,18 @@ async def list_replayable():
 
 async def run_replay(engine, fid, speed=30.0, status_cb=None):
     """тянет историю, сортирует по Ts, кормит движок с ускорением x{speed}"""
-    cfg = json.load(open(SEC, encoding="utf-8"))
-    api = cfg["apiBaseUrl"].rstrip("/")
-    hdrs = {"Authorization": f"Bearer {cfg['jwt']}",
-            "X-Api-Token": cfg["apiToken"], "Accept-Encoding": "gzip"}
+    cfg = _vcfg()
 
     def say(msg):
         print(f"[replay] {msg}", flush=True)
         if status_cb:
             status_cb(msg)
 
-    async with httpx.AsyncClient(timeout=30, headers=hdrs) as cl:
+    async with httpx.AsyncClient(timeout=30) as cl:
         # мета фикстуры: сначала снапшот, если выпал — общий пул с VERIFY
-        r = await cl.get(api + "/fixtures/snapshot")
+        # (все запросы через verify._get: 401 лечится свежим гостевым JWT сам)
+        say("читаю фикстуру")
+        r = await _vget(cl, cfg, "/fixtures/snapshot")
         fx = next((f for f in (r.json() if r.status_code == 200 else [])
                    if str(f["FixtureId"]) == str(fid)), None)
         if fx:
@@ -80,19 +78,20 @@ async def run_replay(engine, fid, speed=30.0, status_cb=None):
         tx._minute = _replay_minute
 
         # история счёта
-        r = await cl.get(f"{api}/scores/historical/{fid}")
+        say("качаю историю счёта")
+        r = await _vget(cl, cfg, f"/scores/historical/{fid}")
         if r.status_code != 200:
             say(f"historical scores: HTTP {r.status_code} (окно 6ч..2нед?)")
             return
-        from verify import _json
         try:
-            scores = _json(r)
+            scores = _vjson(r)
         except Exception as e:
             say(f"history parse: {e}")
             return
         say(f"событий счёта: {len(scores)}")
 
         # история одсов: 5-мин интервалы от старта-15мин до старта+150мин
+        say("качаю историю одсов")
         odds = []
         t0 = int(m["start"]) - 15 * 60000
         for k in range(0, 44):           # 44 интервала x5мин = 220 мин (ОТ+пенальти)
@@ -101,9 +100,9 @@ async def run_replay(engine, fid, speed=30.0, status_cb=None):
             hour, rem2 = divmod(rem, 3600)
             interval = rem2 // 300
             try:
-                r = await cl.get(f"{api}/odds/updates/{day}/{hour}/{interval}")
+                r = await _vget(cl, cfg, f"/odds/updates/{day}/{hour}/{interval}")
                 if r.status_code == 200:
-                    odds += [d for d in _json(r)
+                    odds += [d for d in _vjson(r)
                              if str(d.get("FixtureId")) == str(fid)]
             except Exception:
                 pass
@@ -118,12 +117,16 @@ async def run_replay(engine, fid, speed=30.0, status_cb=None):
             return
         say(f"старт реплея x{speed}: {m['home']} vs {m['away']}")
         prev = feed[0][1]
-        for kind, ts, d in feed:
-            dt = max(0.0, (ts - prev) / 1000.0) / max(speed, 1.0)
-            if dt > 0:
-                await asyncio.sleep(min(dt, 5.0))
-            prev = ts
-            tx._replay_ts = ts
-            d = {**d, "FixtureId": rfid}  # перенаправляем в реплей-карточку
-            (tx.on_score if kind == "s" else tx.on_odds)(d)
+        try:
+            for kind, ts, d in feed:
+                dt = max(0.0, (ts - prev) / 1000.0) / max(speed, 1.0)
+                if dt > 0:
+                    await asyncio.sleep(min(dt, 5.0))
+                prev = ts
+                tx._replay_ts = ts
+                d = {**d, "FixtureId": rfid}  # перенаправляем в реплей-карточку
+                (tx.on_score if kind == "s" else tx.on_odds)(d)
+        except asyncio.CancelledError:
+            say("реплей остановлен")
+            raise
         say("реплей завершён")
