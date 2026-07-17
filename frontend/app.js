@@ -3,7 +3,7 @@
 
 const S = { matches:new Map(), series:new Map(), tape:[], signals:[], lags:[],
             open:[], closed:[], stats:{}, eq:[], dirty:true, replay:{},
-            rp:{running:false} };
+            rp:{running:false}, tapeV:0 };
 const OUT = ["home","draw","away"];
 /* реплей приватен: чужие R-карточки этот браузер просто не рисует */
 const CID = sessionStorage.oid || (sessionStorage.oid = Math.random().toString(36).slice(2,10));
@@ -45,6 +45,7 @@ function pushSeries(m,o,src,p){
 function pushTape(cls,text){
   S.tape.unshift({cls,text,ts:new Date().toLocaleTimeString()});
   if(S.tape.length>90) S.tape.pop();
+  S.tapeV++;
 }
 
 function onEvent(ev){
@@ -183,18 +184,20 @@ function renderLive(){
         <div class="vals"><span class="tx">${fmtP(p.tx)}</span><span class="sep">·</span><span class="pm">${fmtP(p.pm)}</span></div>
       </div>`;}).join("");
     const live=M.status==="live", isR=myReplays.has(String(M.m));
-    const stopBtn = isR && S.rp.running && S.rp.cid===CID && ("R"+S.rp.fid)===String(M.m)
-      ? ` <button class="btnstop" onclick="stopReplay()">■ stop</button>` : "";
+    const mine = isR && S.rp.running && S.rp.cid===CID && ("R"+S.rp.fid)===String(M.m);
+    const prog = mine && S.rp.msg ? ` · <span class="rp-prog">${S.rp.msg}</span>` : "";
+    const stopBtn = mine ? ` <button class="btnstop" onclick="stopReplay()">■ stop</button>` : "";
     return `<div class="card match ${live?"is-live":""} ${isR?"is-replay":""} ${Date.now()-M.flash<400?"pulse":""}">
       <div class="teams"><span>${M.home}</span><span class="score">${M.score[0]}–${M.score[1]}</span><span>${M.away}</span></div>
-      <div class="meta">${isR?`<span class="chip-replay">REPLAY ×30 · only you see this</span> · `:""}${live?`<span class="dotlive"></span>LIVE · ${M.minute}'`:M.status.toUpperCase()} ${cd?"· "+cd:""} · <span class="fid">${M.m}</span>${stopBtn}</div>
+      <div class="meta">${isR?`<span class="chip-replay">REPLAY ×30 · only you see this</span> · `:""}${live?`<span class="dotlive"></span>LIVE · ${M.minute}'`:M.status.toUpperCase()} ${cd?"· "+cd:""} · <span class="fid">${M.m}</span>${prog}${stopBtn}</div>
       ${rows}</div>`;
   }).join("") : `<div class="empty">Waiting for the feed.</div>`;
   document.querySelectorAll("canvas.spark").forEach(cv=>{
     const s=S.series.get(cv.dataset.k)||{tx:[],pm:[]}; spark(cv,s.tx,s.pm); });
+  if(S.tapeV!==S._tapeVR){ S._tapeVR=S.tapeV;      // тейп перерисовываем только при новых строках (без мельтешения)
   $("tape").innerHTML=S.tape.map(x=>
     `<div class="tape-item ${x.cls}"><span class="ts">${x.ts}</span><span>${x.text}</span></div>`).join("")
-    || `<div class="empty">The tape is empty. It fills the moment a match goes live.</div>`;
+    || `<div class="empty">The tape is empty. It fills the moment a match goes live.</div>`; }
   const st=S.stats;
   kv($("heroKv"),[["matches",[...S.matches.values()].filter(m=>m.status!=="ft").length],
     ["signals",st.signals],["crowd lag p50",st.lag_p50_ms==null?"–":st.lag_p50_ms+"ms"],

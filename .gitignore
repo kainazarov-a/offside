@@ -11,3 +11,6 @@ idl/
 ngrok.exe
 *.zip
 .ngrok2/
+config/match_map.json
+run-server.bat
+run-tunnel.bat

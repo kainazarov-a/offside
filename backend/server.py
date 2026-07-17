@@ -157,7 +157,7 @@ async def replay_start(fid: str, speed: float = 30.0, cid: str = ""):
                 rp.run_replay(engine, fid, speed, status_cb=cb),
                 timeout=REPLAY_MAX_S)
         except asyncio.TimeoutError:
-            cb("авто-стоп по таймеру")
+            cb("auto-stopped after 20 min")
             _replay_cleanup()
         except asyncio.CancelledError:
             raise
