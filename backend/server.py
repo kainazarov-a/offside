@@ -106,6 +106,13 @@ _replay_task = None
 REPLAY_MAX_S = 1200          # авто-стоп: забытый реплей гаснет сам через 20 мин
 
 
+def _rp_pub():
+    """статус реплея едет клиентам по уже открытому SSE — ноль лишних
+    HTTP-запросов через ngrok (бесплатный тариф: 20k запросов/мес)"""
+    bus.publish({"type": "rp", **{k: _replay_state[k]
+                                  for k in ("running", "msg", "fid", "cid")}})
+
+
 def _replay_cleanup():
     """убрать карточку текущего реплея из движка (фронт получит remove)"""
     if _replay_state.get("fid"):
@@ -126,6 +133,7 @@ async def _stop_replay():
     # поэтому уборку карточки на running не завязываем
     _replay_cleanup()
     _replay_state.update(running=False, msg="stopped")
+    _rp_pub()
 
 
 @app.get("/api/replay/list")
@@ -151,9 +159,11 @@ async def replay_start(fid: str, speed: float = 30.0, cid: str = ""):
 
     def cb(msg):
         _replay_state["msg"] = msg
+        _rp_pub()
 
     async def _run():
         _replay_state.update(running=True, msg="starting", fid=fid, cid=cid)
+        _rp_pub()
         try:
             await asyncio.wait_for(
                 rp.run_replay(engine, fid, speed, status_cb=cb),
@@ -167,6 +177,7 @@ async def replay_start(fid: str, speed: float = 30.0, cid: str = ""):
             cb(f"error: {e!r}")
         finally:
             _replay_state["running"] = False
+            _rp_pub()
 
     _replay_task = asyncio.create_task(_run())
     return JSONResponse({"ok": True})

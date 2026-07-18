@@ -51,6 +51,7 @@ function pushTape(cls,text){
 function onEvent(ev){
   if(ev.m!=null && foreignR(ev.m)) return;          // не мой реплей — не моё дело
   switch(ev.type){
+    case "rp":{ applyRp({running:ev.running,msg:ev.msg,fid:ev.fid,cid:ev.cid}); break; }
     case "remove":{ S.matches.delete(ev.m);
       OUT.forEach(o=>S.series.delete(serKey(ev.m,o)));
       S.signals=S.signals.filter(s=>s.m!==ev.m); break; }
@@ -284,22 +285,23 @@ window.stopReplay=async ()=>{
   try{ await fetch(`/api/replay/stop?cid=${CID}`,{method:"POST"}); }catch(_){}
   pushTape("","■ replay stopped"); S.dirty=true;
 };
-/* пульс реплей-движка: статус-строка + перерисовка кнопки stop на карточке */
+/* статус реплея: основной канал — SSE-событие 'rp' (ноль лишних запросов
+   через ngrok); редкий опрос раз в 60с — только страховка на обрыв потока */
+function applyRp(d){
+  const changed=JSON.stringify(d)!==JSON.stringify(S.rp);
+  S.rp=d; if(changed) S.dirty=true;
+  const el=$("rpStatus");
+  if(el){
+    el.innerHTML = d.running
+      ? (d.cid===CID
+         ? `▶ your replay is running — <b>${d.msg||"working"}</b> · <button class="btnstop" onclick="stopReplay()">■ stop</button> · <a href="#live">watch it on Live</a>`
+         : `⏳ replay engine is busy with another visitor's run — try again in a minute`)
+      : "";
+  }
+}
 setInterval(async ()=>{
-  try{
-    const r=await fetch("/api/replay/status"); const d=await r.json();
-    const changed=JSON.stringify(d)!==JSON.stringify(S.rp);
-    S.rp=d; if(changed) S.dirty=true;
-    const el=$("rpStatus");
-    if(el){
-      el.innerHTML = d.running
-        ? (d.cid===CID
-           ? `▶ your replay is running — <b>${d.msg||"working"}</b> · <button class="btnstop" onclick="stopReplay()">■ stop</button> · <a href="#live">watch it on Live</a>`
-           : `⏳ replay engine is busy with another visitor's run — try again in a minute`)
-        : "";
-    }
-  }catch(_){}
-},2500);
+  try{ const r=await fetch("/api/replay/status"); applyRp(await r.json()); }catch(_){}
+},60000);
 
 /* ---------- verify ---------- */
 const V={loaded:false,byFid:new Map()};
