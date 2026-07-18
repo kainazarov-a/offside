@@ -106,8 +106,9 @@
   .dotlive{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--hot);
     margin-right:6px;animation:blink 1.2s infinite;box-shadow:0 0 8px rgba(255,90,90,.8)}
   @keyframes blink{50%{opacity:.25}}
-  .probrow{display:grid;grid-template-columns:44px 1fr 116px;gap:12px;align-items:center;margin:9px 0}
-  .probrow .lbl{color:var(--muted);font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.1em}
+  .probrow{display:grid;grid-template-columns:96px 1fr 116px;gap:12px;align-items:center;margin:9px 0}
+  .probrow .lbl{color:var(--muted);font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.1em;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .probrow .mid{display:flex;flex-direction:column;gap:5px;min-width:0}
   canvas.spark{width:100%;height:26px;display:block}
   .bars{position:relative;height:11px;background:#0B0D10;border:1px solid #191E23;border-radius:6px;overflow:hidden}
@@ -240,7 +241,7 @@
     .kv .item{min-width:calc(50% - 8px);flex:1}
     .kv .v{font-size:22px}
     .match .teams{font-size:17px}
-    .probrow{grid-template-columns:40px 1fr 96px;gap:8px}
+    .probrow{grid-template-columns:76px 1fr 96px;gap:8px}
     .nav{padding:10px 12px}
     .nav .brand{font-size:17px;margin-right:8px}
   }
@@ -418,11 +419,14 @@
       <div>
         <div class="section-title offside-line">Matches · sharp vs crowd</div>
         <p class="muted" style="font-family:var(--mono);font-size:11.5px;margin:-4px 0 12px">
-          Lime moves first, blue follows. The space between them is the crowd's delay,
-          and that delay is what the agent trades on paper.</p>
+          Each card is one match: home team on the left, away on the right. Every row is one
+          outcome with two prices for the same thing — <b style="color:var(--acid)">lime is the
+          professional TxLINE feed</b> (it reacts to the pitch first), <b style="color:var(--cool)">blue
+          is the Polymarket crowd</b> (it follows seconds later). When lime has moved and blue
+          hasn't caught up yet, that gap is the crowd's delay — exactly what the agent trades on paper.</p>
         <div class="cards" id="cards"><div class="empty">Waiting for the feed.</div></div>
-        <div class="legend"><span class="sw" style="background:var(--acid)"></span>TxLINE (sharp)
-          <span class="sw" style="background:var(--cool)"></span>Polymarket (crowd)</div>
+        <div class="legend"><span class="sw" style="background:var(--acid)"></span>TxLINE (sharp) — thick line, top bar
+          <span class="sw" style="background:var(--cool)"></span>Polymarket (crowd) — thin line, bottom bar · longer bar = higher chance</div>
       </div>
       <div>
         <div class="section-title offside-line">Event tape</div>
@@ -433,7 +437,11 @@
 
   <!-- ================= AGENT ================= -->
   <div id="tab-agent" hidden>
-    <div class="kv" id="agentKv" style="margin:8px 0 16px"></div>
+    <div class="kv" id="agentKv" style="margin:8px 0 10px"></div>
+    <p class="muted" style="font-family:var(--mono);font-size:11.5px;margin:0 0 14px">
+      A signal fires on a sharp probability jump or a goal. If the crowd's price lags far
+      enough behind, the agent opens a paper position — after a modeled execution delay,
+      paying the spread both ways. Everything below is deterministic arithmetic, not hindsight.</p>
     <div class="section-title offside-line">Signals</div>
     <div class="card"><table class="data" id="sigTable">
       <thead><tr><th>#</th><th>t</th><th>match</th><th>o</th><th>kind</th><th>Δp</th><th>gap pp</th></tr></thead>
@@ -446,7 +454,11 @@
 
   <!-- ================= LAG LAB ================= -->
   <div id="tab-lag" hidden>
-    <div class="kv" id="lagKv" style="margin:8px 0 16px"></div>
+    <div class="kv" id="lagKv" style="margin:8px 0 10px"></div>
+    <p class="muted" style="font-family:var(--mono);font-size:11.5px;margin:0 0 14px">
+      One question, one chart: after real news, how many seconds does the crowd stay wrong?
+      Each dislocation is timed from the sharp move until the crowd price catches up —
+      bars further to the right mean a slower crowd, red means it never reacted within a minute.</p>
     <div class="section-title offside-line">Crowd reaction time · histogram</div>
     <div class="card"><canvas id="lagHist"></canvas></div>
     <div class="section-title offside-line">Dislocation records</div>
@@ -458,6 +470,10 @@
   <!-- ================= PNL ================= -->
   <div id="tab-pnl" hidden>
     <div class="kv" id="pnlKv" style="margin:8px 0 10px"></div>
+    <p class="muted" style="font-family:var(--mono);font-size:11.5px;margin:0 0 10px">
+      Every closed paper trade with entry, exit and result, and the equity curve they add up to.
+      The gold line below the chart is the exact cost model behind every fill — nothing hidden,
+      every dollar is reproducible arithmetic.</p>
     <div class="card" style="margin-bottom:14px"><canvas id="eqSpark"></canvas></div>
     <div class="assump" id="assump"></div>
     <div class="card"><table class="data" id="pnlTable">
@@ -473,9 +489,9 @@
     <p class="muted" style="font-family:var(--mono);font-size:12px">Matches that started
       between 6 hours and 2 weeks ago can be replayed at 30x speed. Replay drives the
       exact same ingestion and detector pipeline on real historical TxLINE data.
-      Your replay is pinned to the top of the Live tab and is visible only in your
-      browser session — stop it anytime with the ■ button. The crowd feed is live
-      only, so the paper trader idles during a replay.</p>
+      Your replay is pinned to the top of the Live tab and runs only in this browser tab —
+      other visitors keep a clean live view. Stop it anytime with the ■ button. The crowd
+      feed is live only, so the paper trader idles during a replay.</p>
   </div>
 
   <!-- ================= VERIFY ================= -->
@@ -634,6 +650,6 @@ python backend/server.py --live                          # or --sim for a synthe
 </div>
 
 <footer>OFFSIDE · World Cup Hackathon · powered by TxLINE on Solana · paper trading only, not betting advice</footer>
-<script src="/app.js?v=3"></script>
+<script src="/app.js?v=4"></script>
 </body>
 </html>

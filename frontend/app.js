@@ -172,8 +172,11 @@ function renderLive(){
     const cd=M.status==="pre"?countdown(M.kickoff):"";
     const rows=OUT.map(o=>{
       const p=M.probs[o]||{}, k=serKey(M.m,o);
+      const lblTx = o==="draw" ? "draw" : (o==="home"?M.home:M.away);
+      const lblTip = o==="draw" ? "the match ends level"
+        : (o==="home"?"home team — the left name on this card":"away team — the right name on this card");
       return `<div class="probrow">
-        <div class="lbl">${o}</div>
+        <div class="lbl" title="${lblTip}">${lblTx}</div>
         <div class="mid">
           <canvas class="spark" data-k="${k}"></canvas>
           <div class="bars">
@@ -189,7 +192,7 @@ function renderLive(){
     const stopBtn = mine ? ` <button class="btnstop" onclick="stopReplay()">■ stop</button>` : "";
     return `<div class="card match ${live?"is-live":""} ${isR?"is-replay":""} ${Date.now()-M.flash<400?"pulse":""}">
       <div class="teams"><span>${M.home}</span><span class="score">${M.score[0]}–${M.score[1]}</span><span>${M.away}</span></div>
-      <div class="meta">${isR?`<span class="chip-replay">REPLAY ×30 · only you see this</span> · `:""}${live?`<span class="dotlive"></span>LIVE · ${M.minute}'`:M.status.toUpperCase()} ${cd?"· "+cd:""} · <span class="fid">${M.m}</span>${prog}${stopBtn}</div>
+      <div class="meta">${isR?`<span class="chip-replay" title="runs only in this browser tab — other visitors don't see it">YOUR REPLAY ×30</span> · `:""}${live?`<span class="dotlive"></span>LIVE · ${M.minute}'`:M.status.toUpperCase()} ${cd?"· "+cd:""} · <span class="fid">${M.m}</span>${prog}${stopBtn}</div>
       ${rows}</div>`;
   }).join("") : `<div class="empty">Waiting for the feed.</div>`;
   document.querySelectorAll("canvas.spark").forEach(cv=>{
@@ -245,16 +248,18 @@ function renderPnl(){
     || `<tr><td colspan="8" class="empty">No closed trades yet. Paper trades open and close during live play.${nextKick()}<br><a class="btn ghost" style="margin-top:12px" href="#verify">Prove a real goal on Verify meanwhile</a></td></tr>`;
 }
 async function renderReplay(){
-  if(S.replay.loaded) return;
-  S.replay.loaded=true;
+  const now=Date.now();      // пустой/упавший список сам переспрашивается каждые 15с
+  if(S.replay.loaded && !(S.replay.empty && now-(S.replay.t||0)>15000)) return;
+  S.replay.loaded=true; S.replay.t=now;
   try{
     const r=await fetch("/api/replay/list"); const list=await r.json();
-    $("replayList").innerHTML = Array.isArray(list)&&list.length ?
+    S.replay.empty=!(Array.isArray(list)&&list.length);
+    $("replayList").innerHTML = !S.replay.empty ?
       list.map(f=>`<div class="rp-item"><div><b>${f.home} vs ${f.away}</b>
         <span class="muted">· ${f.comp} · ${new Date(f.start).toLocaleString()}</span></div>
         <button class="btn" onclick="startReplay('${f.fid}',this)">Replay ×30</button></div>`).join("")
       : `<div class="empty">No finished matches in the replay window yet. Tonight's quarterfinals appear here about 6 hours after the final whistle.</div>`;
-  }catch(e){ $("replayList").innerHTML=`<div class="empty">${e}</div>`; }
+  }catch(e){ S.replay.empty=true; $("replayList").innerHTML=`<div class="empty">${e}</div>`; }
 }
 window.startReplay=async (fid,btn)=>{
   if(btn){btn.disabled=true;btn.textContent="STARTING…";}
@@ -271,7 +276,7 @@ window.startReplay=async (fid,btn)=>{
     }
     myReplays.add("R"+fid); sessionStorage.myReplays=[...myReplays].join(",");
     if(btn){btn.disabled=false;btn.textContent="Replay ×30";}
-    pushTape("signal","▶ REPLAY started · pinned on top of Live, visible only to you");
+    pushTape("signal","▶ REPLAY started · pinned on top of Live — runs only in this browser tab");
     location.hash="#live";
   }catch(e){ if(btn){btn.disabled=false;btn.textContent="Replay ×30";} }
 };
@@ -299,13 +304,17 @@ setInterval(async ()=>{
 /* ---------- verify ---------- */
 const V={loaded:false,byFid:new Map()};
 async function renderVerify(){
-  if(V.loaded) return; V.loaded=true;
+  const now=Date.now();      // пустой список переспрашивается каждые 15с (пока пул греется)
+  if(V.loaded && !(V.empty && now-(V.t||0)>15000)) return;
+  V.loaded=true; V.t=now;
   try{
     const r=await fetch("/api/verify/candidates"); const list=await r.json();
     if(!Array.isArray(list)||!list.length){
+      V.empty=true;
       $("vSel").innerHTML=`<option value="">no finished matches yet, check back after tonight's games</option>`;
       return;
     }
+    V.empty=false;
     list.forEach(f=>V.byFid.set(f.fid,f));
     $("vSel").innerHTML=`<option value="">— pick a match —</option>`+list.map(f=>
       `<option value="${f.fid}">${f.home} vs ${f.away} · ${new Date(f.start).toLocaleDateString()}${f.live_goals?" · caught live":""}</option>`).join("");
@@ -345,7 +354,7 @@ window.proveGoal=async (fid,seq,stat,expect,side,minute,score)=>{
     if(oc.ok===true)  badge=`<div class="vbadge ok">✔ PROVED ON-CHAIN · goals(${side}) = ${expect}</div>`;
     else if(oc.ok===false) badge=`<div class="vbadge bad">✘ REJECTED BY PROGRAM</div>`;
     else if(oc.pdaExists===false) badge=`<div class="vbadge wait">Daily root not on chain yet. Proof package below.</div>`;
-    else badge=`<div class="vbadge wait">Proof package fetched. On chain view unavailable: ${oc.error||"unknown"}</div>`;
+    else badge=`<div class="vbadge wait">Proof package fetched. On chain view unavailable: ${String(oc.error||"unknown").slice(0,160)}</div>`;
     const row=(k,v)=>`<div class="vrow"><span class="k">${k}</span><span class="v">${v}</span></div>`;
     $("vPanel").innerHTML = badge
       + row("goal", `${minute}' · ${side==="home"?f.home:f.away} · ${score}`)

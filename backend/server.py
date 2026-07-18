@@ -141,7 +141,9 @@ async def replay_list():
 async def replay_start(fid: str, speed: float = 30.0, cid: str = ""):
     global _replay_task
     import replay as rp
-    if _replay_state["running"]:
+    busy = _replay_state["running"] or (_replay_task is not None
+                                        and not _replay_task.done())
+    if busy:
         if cid and cid == _replay_state.get("cid"):
             await _stop_replay()      # тот же зритель выбрал другой матч — перезапуск
         else:
